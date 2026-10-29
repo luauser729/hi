@@ -1,0 +1,671 @@
+local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+
+function gradient(text, startColor, endColor)
+    local result, chars = "", {}
+    for uchar in text:gmatch("[%z\1-\127\194-\244][%128-%255]*") do table.insert(chars, uchar) end
+    for i = 1, #chars do
+        local t = (i - 1) / math.max(#chars - 1, 1)
+        local r = startColor.R + (endColor.R - startColor.R) * t
+        local g = startColor.G + (endColor.G - startColor.G) * t
+        local b = startColor.B + (endColor.B - startColor.B) * t
+        result = result .. string.format('<font color="rgb(%d,%d,%d)">%s</font>', math.floor(r*255), math.floor(g*255), math.floor(b*255), chars[i])
+    end
+    return result
+end
+
+local Window = WindUI:CreateWindow({
+    Title = gradient("俄亥俄州", Color3.fromRGB(59, 130, 246), Color3.fromRGB(96, 165, 250)),
+    IconThemed = true, Folder = "ohio", Size = UDim2.fromOffset(150, 100),
+    Transparent = true, Theme = "Dark", Resizable = true, SideBarWidth = 150, HideSearchBar = true,
+    User = { Enabled = true, Anonymous = false, Callback = function() end },
+})
+
+Window:EditOpenButton({ Title = gradient("[俄亥俄州]", Color3.fromRGB(59, 130, 246), Color3.fromRGB(96, 165, 250)), CornerRadius = UDim.new(0, 6), StrokeThickness = 1.25 })
+Window:SetToggleKey(Enum.KeyCode.F, true)
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+local TabSec = Window:Tab({ Title = "安全防护", Icon = "shield" })
+local TabNot = Window:Tab({ Title = "公告", Icon = "megaphone" })
+local TabPly = Window:Tab({ Title = "玩家", Icon = "user" })
+local TabAim = Window:Tab({ Title = "自瞄", Icon = "crosshair" })
+local TabESP = Window:Tab({ Title = "透视", Icon = "eye" })
+local TabHit = Window:Tab({ Title = "碰撞箱", Icon = "box" })
+local TabTP  = Window:Tab({ Title = "传送", Icon = "map-pin" })
+local TabAuto = Window:Tab({ Title = "自动", Icon = "zap" })
+local TabPull = Window:Tab({ Title = "吸人", Icon = "magnet" })
+local TabSettings = Window:Tab({ Title = "设置", Icon = "settings" }) -- 新增设置标签
+
+-- =========================================================
+-- 🛡️ 安全防护页
+-- =========================================================
+local antiKickEnabled, antiCheatHookEnabled = false, false
+local originalKick = LocalPlayer.Kick
+
+TabSec:Section({ Title = "🛡️ 究极反作弊" })
+TabSec:Toggle({ Title = "开启防踢 (断网遁)", Value = false, Callback = function(enabled)
+    antiKickEnabled = enabled
+    if enabled then
+        LocalPlayer.Kick = function(self, msg)
+            if antiKickEnabled then
+                pcall(function()
+                    if game:GetService("NetworkClient") then game:GetService("NetworkClient"):Disconnect() end
+                    game:GetService("StarterGui"):SetCore("SendNotification", {Title="⚠️ 拦截", Text="系统尝试踢出你，已被强行断网拦截！", Duration=5})
+                end)
+            else originalKick(self, msg) end
+        end
+    else LocalPlayer.Kick = originalKick end
+end })
+
+TabSec:Toggle({ Title = "摧毁本地反作弊脚本", Value = false, Callback = function(enabled)
+    antiCheatHookEnabled = enabled
+    if enabled then
+        local count = 0
+        for _, obj in ipairs(game:GetDescendants()) do
+            if obj:IsA("LocalScript") then
+                local name = string.lower(obj.Name)
+                if name:find("anticheat") or name:find("detect") or name:find("check") or name:find("ban") then
+                    obj.Disabled = true; count = count + 1
+                end
+            end
+        end
+        print("[安全防护] 已摧毁 " .. count .. " 个反作弊脚本")
+    end
+end })
+
+-- =========================================================
+-- 公告页
+-- =========================================================
+TabNot:Section({ Title = "反馈与免责" })
+TabNot:Paragraph({ Title = "作者：神之", Desc = "有问题请进企鹅群反馈" })
+TabNot:Paragraph({ Title = "⚠️ 封号警告", Desc = "如果用此脚本封号了，请自己承担。如果不想承担，那请关闭。" })
+
+-- =========================================================
+-- 玩家页
+-- =========================================================
+local speedVal, speedEn, speedConn = 16, false, nil
+TabPly:Section({ Title = "移动加速 (物理)" })
+TabPly:Slider({ Title = "移动速度", Value = { Min = 16, Max = 500, Default = 16 }, Callback = function(v) speedVal = v end })
+TabPly:Toggle({ Title = "开启物理加速", Value = false, Callback = function(en)
+    speedEn = en
+    if speedConn then speedConn:Disconnect(); speedConn = nil end
+    if en then
+        local char = LocalPlayer.Character; local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then hum.WalkSpeed = speedVal end
+        speedConn = RunService.Heartbeat:Connect(function()
+            if not speedEn then return end
+            local c = LocalPlayer.Character; local h = c and c:FindFirstChild("HumanoidRootPart"); local m = c and c:FindFirstChildOfClass("Humanoid")
+            if h and m and m.MoveDirection.Magnitude > 0 then
+                h.AssemblyLinearVelocity = Vector3.new(m.MoveDirection.X * speedVal, h.AssemblyLinearVelocity.Y, m.MoveDirection.Z * speedVal)
+            end
+        end)
+    else
+        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if hum then hum.WalkSpeed = 16 end
+    end
+end })
+
+TabPly:Slider({ Title = "跳跃高度", Value = { Min = 50, Max = 500, Default = 50 }, Callback = function(v) 
+    local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if hum then hum.UseJumpPower = true; hum.JumpPower = v end 
+end })
+
+-- 悬浮飞行 (手机)
+local flyEn, flySpd, flyConn = false, 50, nil
+local flyGui, flyKeys = nil, {W=false, A=false, S=false, D=false, Up=false, Down=false}
+local function destroyFlyUI() if flyGui and flyGui.Parent then flyGui:Destroy() end flyGui = nil flyKeys = {W=false, A=false, S=false, D=false, Up=false, Down=false} end
+local function createFlyUI()
+    if flyGui then return end
+    flyGui = Instance.new("ScreenGui"); flyGui.Name = "FlyUIControl"; flyGui.ResetOnSpawn = false; flyGui.IgnoreGuiInset = true; flyGui.DisplayOrder = 5000; flyGui.Parent = game:GetService("CoreGui")
+    local function makeBtn(text, pos, size, key)
+        local b = Instance.new("TextButton"); b.Size = size; b.Position = pos; b.BackgroundColor3 = Color3.fromRGB(0, 0, 0); b.BackgroundTransparency = 0.4; b.Text = text; b.TextColor3 = Color3.fromRGB(255, 255, 255); b.Font = Enum.Font.SourceSansBold; b.TextSize = 24; b.AutoButtonColor = false; b.Parent = flyGui
+        Instance.new("UICorner", b).CornerRadius = UDim.new(0, 12)
+        local s = Instance.new("UIStroke", b); s.Color = Color3.fromRGB(0, 140, 255); s.Thickness = 2
+        b.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then flyKeys[key] = true end end)
+        b.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then flyKeys[key] = false end end)
+    end
+    local btnSize, gap, baseX, baseY = UDim2.fromOffset(56, 56), 62, 30, -220
+    makeBtn("▲", UDim2.new(0, baseX + gap, 1, baseY - gap), btnSize, "W")
+    makeBtn("◀", UDim2.new(0, baseX, 1, baseY), btnSize, "A")
+    makeBtn("▼", UDim2.new(0, baseX + gap, 1, baseY), btnSize, "S")
+    makeBtn("▶", UDim2.new(0, baseX + gap * 2, 1, baseY), btnSize, "D")
+    makeBtn("↑", UDim2.new(1, -80, 1, baseY - gap), UDim2.fromOffset(60, 60), "Up")
+    makeBtn("↓", UDim2.new(1, -80, 1, baseY), UDim2.fromOffset(60, 60), "Down")
+end
+
+TabPly:Section({ Title = "飞行功能" })
+TabPly:Slider({ Title = "飞行速度", Value = { Min = 10, Max = 500, Default = 50 }, Callback = function(v) flySpd = v end })
+TabPly:Toggle({ Title = "开启悬浮飞行", Value = false, Callback = function(en)
+    flyEn = en
+    local char = LocalPlayer.Character; local hrp = char and char:FindFirstChild("HumanoidRootPart"); local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if en and hrp and hum then
+        hum.PlatformStand = true
+        createFlyUI()
+        if flyConn then flyConn:Disconnect() end
+        flyConn = RunService.RenderStepped:Connect(function(dt)
+            if not flyEn then return end
+            local c = LocalPlayer.Character; local h = c and c:FindFirstChild("HumanoidRootPart"); local m = c and c:FindFirstChildOfClass("Humanoid")
+            if not h or not m then return end
+            local moveVector = Vector3.new(0, 0, 0); local camCFrame = Camera.CFrame
+            if flyKeys.W then moveVector = moveVector + camCFrame.LookVector end
+            if flyKeys.S then moveVector = moveVector - camCFrame.LookVector end
+            if flyKeys.A then moveVector = moveVector - camCFrame.RightVector end
+            if flyKeys.D then moveVector = moveVector + camCFrame.RightVector end
+            if flyKeys.Up then moveVector = moveVector + Vector3.new(0, 1, 0) end
+            if flyKeys.Down then moveVector = moveVector - Vector3.new(0, 1, 0) end
+            if moveVector.Magnitude > 0 then h.CFrame = h.CFrame + (moveVector.Unit * flySpd * dt) end
+            h.AssemblyLinearVelocity = Vector3.new(0,0,0); h.AssemblyAngularVelocity = Vector3.new(0,0,0)
+        end)
+    else
+        if flyConn then flyConn:Disconnect(); flyConn = nil end
+        if char and hum then hum.PlatformStand = false; if char:FindFirstChild("Animate") then char.Animate.Disabled = false end end
+        destroyFlyUI()
+    end
+end })
+
+-- =========================================================
+-- 自瞄页
+-- =========================================================
+local aimEn, showFOV, showTrc, fovR, wallChk, aimPart = false, false, false, 150, false, "头部"
+local fovCircle, tracerLine
+if typeof(Drawing) == "table" and Drawing.new then
+    fovCircle = Drawing.new("Circle"); fovCircle.Thickness = 2; fovCircle.Color = Color3.fromRGB(0, 140, 255); fovCircle.Filled = false; fovCircle.Visible = false
+    tracerLine = Drawing.new("Line"); tracerLine.Thickness = 1; tracerLine.Color = Color3.fromRGB(0, 255, 255); tracerLine.Visible = false
+end
+local function getAimP(char) if aimPart == "头部" then return char:FindFirstChild("Head") elseif aimPart == "身体" then return char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso") or char:FindFirstChild("HumanoidRootPart") else return char:FindFirstChild("HumanoidRootPart") end end
+local function hasLOS(tChar, tPart)
+    local mChar = LocalPlayer.Character; local mHrp = mChar and mChar:FindFirstChild("HumanoidRootPart")
+    if not mHrp or not tPart then return false end
+    local rp = RaycastParams.new(); rp.FilterType = Enum.RaycastFilterType.Exclude; rp.FilterDescendantsInstances = {mChar, tChar}
+    return workspace:Raycast(mHrp.Position, tPart.Position - mHrp.Position, rp) == nil
+end
+local function getClosestT()
+    local cPart, sDist = nil, fovR; if not Camera then return nil end
+    local scCenter = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then
+            local c = plr.Character; local h = c and c:FindFirstChildOfClass("Humanoid")
+            if h and h.Health > 0 then
+                local tP = getAimP(c)
+                if tP then local sp, onScr = Camera:WorldToViewportPoint(tP.Position)
+                    if onScr then local d = (Vector2.new(sp.X, sp.Y) - scCenter).Magnitude
+                        if d < sDist then if wallChk then if hasLOS(c, tP) then cPart = tP; sDist = d end else cPart = tP; sDist = d end end
+                    end
+                end
+            end
+        end
+    end
+    return cPart
+end
+RunService.RenderStepped:Connect(function()
+    if not Camera then return end
+    local scCenter = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    if fovCircle then if showFOV then fovCircle.Position = scCenter; fovCircle.Radius = fovR; fovCircle.Visible = true else fovCircle.Visible = false end end
+    if not aimEn then if tracerLine then tracerLine.Visible = false end return end
+    local t = getClosestT()
+    if t then
+        Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, t.Position), 0.35)
+        if tracerLine and showTrc then local sp, onScr = Camera:WorldToViewportPoint(t.Position)
+            if onScr then tracerLine.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y); tracerLine.To = Vector2.new(sp.X, sp.Y); tracerLine.Visible = true else tracerLine.Visible = false end
+        elseif tracerLine then tracerLine.Visible = false end
+    else if tracerLine then tracerLine.Visible = false end end
+end)
+TabAim:Section({ Title = "自瞄设置" })
+TabAim:Toggle({ Title = "开启自瞄", Value = false, Callback = function(en) aimEn = en end })
+TabAim:Toggle({ Title = "显示 FOV 圈", Value = false, Callback = function(en) showFOV = en end })
+TabAim:Slider({ Title = "FOV 大小", Value = { Min = 50, Max = 600, Default = 150 }, Callback = function(v) fovR = v end })
+TabAim:Dropdown({ Title = "瞄准部位", Values = {"头部", "身体", "最近部位"}, Value = "头部", Callback = function(o) aimPart = o end })
+TabAim:Toggle({ Title = "掩体检测", Value = false, Callback = function(en) wallChk = en end })
+TabAim:Toggle({ Title = "显示射线", Value = false, Callback = function(en) showTrc = en end })
+
+-- =========================================================
+-- 透视页
+-- =========================================================
+local espEn, sBox, sName, sDist, sHp = false, true, true, true, false
+local eCol = Color3.fromRGB(255, 50, 50)
+local eGui = Instance.new("ScreenGui"); eGui.Name = "ESP"; eGui.ResetOnSpawn = false; eGui.DisplayOrder = 999; eGui.Parent = game:GetService("CoreGui")
+local eDrw = {}
+
+local function mkESP(plr)
+    local d = {box = Instance.new("Frame"), name = Instance.new("TextLabel"), hp = Instance.new("Frame"), hpBg = Instance.new("Frame"), dist = Instance.new("TextLabel")}
+    d.box.BackgroundTransparency = 1; d.box.Parent = eGui
+    for _, n in ipairs({"Top", "Bottom", "Left", "Right"}) do local f = Instance.new("Frame"); f.Name = n; f.BackgroundColor3 = eCol; f.BorderSizePixel = 0; f.Parent = d.box end
+    d.name.BackgroundTransparency = 1; d.name.TextColor3 = eCol; d.name.Font = Enum.Font.GothamBold; d.name.TextSize = 14; d.name.TextStrokeTransparency = 0; d.Parent = eGui
+    d.dist.BackgroundTransparency = 1; d.dist.TextColor3 = Color3.new(1,1,1); d.dist.Font = Enum.Font.GothamBold; d.dist.TextSize = 12; d.dist.TextStrokeTransparency = 0; d.dist.Parent = eGui
+    d.hpBg.BackgroundColor3 = Color3.new(0,0,0); d.hpBg.BorderSizePixel = 0; d.hpBg.Parent = eGui
+    d.hp.BackgroundColor3 = Color3.new(0,255,0); d.hp.BorderSizePixel = 0; d.hp.Parent = d.hpBg
+    eDrw[plr] = d; return d
+end
+
+RunService.RenderStepped:Connect(function()
+    if not Camera then return end
+    if not espEn then for p, d in pairs(eDrw) do for _, v in pairs(d) do if v.Destroy then v:Destroy() end end; eDrw[p] = nil end return end
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer then
+            local c = plr.Character; local h = c and c:FindFirstChildOfClass("Humanoid"); local r = c and c:FindFirstChild("HumanoidRootPart"); local hd = c and c:FindFirstChild("Head")
+            if h and r and hd and h.Health > 0 then
+                local d = eDrw[plr] or mkESP(plr)
+                local hp = Camera:WorldToViewportPoint(hd.Position + Vector3.new(0,0.5,0)); local rp = Camera:WorldToViewportPoint(r.Position); local fp = Camera:WorldToViewportPoint(r.Position - Vector3.new(0,3,0))
+                local hgt = math.abs(fp.Y - hp.Y); local wd = hgt * 0.6; local x = rp.X - wd/2; local y = hp.Y
+                if hp.Z > 0 then
+                    d.box.Visible = sBox
+                    if sBox then d.box.Position = UDim2.new(0,x,0,y); d.box.Size = UDim2.new(0,wd,0,hgt); d.box.Top.Size = UDim2.new(1,0,0,1); d.box.Bottom.Position = UDim2.new(0,0,1,-1); d.box.Bottom.Size = UDim2.new(1,0,0,1); d.box.Left.Size = UDim2.new(0,1,1,0); d.box.Right.Position = UDim2.new(1,-1,0,0); d.box.Right.Size = UDim2.new(0,1,1,0) end
+                    d.name.Visible = sName
+                    if sName then d.name.Position = UDim2.new(0,x-30,0,y-18); d.name.Size = UDim2.new(0,wd+60,0,16); d.name.Text = plr.Name end
+                    d.dist.Visible = sDist
+                    if sDist then local ds = (r.Position - Camera.CFrame.Position).Magnitude; d.dist.Position = UDim2.new(0,x-30,0,y+hgt); d.dist.Size = UDim2.new(0,wd+60,0,14); d.dist.Text = math.floor(ds).."m" end
+                    d.hpBg.Visible = sHp
+                    if sHp then d.hpBg.Position = UDim2.new(0,x-6,0,y); d.hpBg.Size = UDim2.new(0,3,0,hgt); d.hp.Position = UDim2.new(0,0,1,0); d.hp.Size = UDim2.new(1,0,h.Health/h.MaxHealth,0); d.hp.AnchorPoint = Vector2.new(0,1); d.hp.BackgroundColor3 = Color3.new(0,1,0):Lerp(Color3.new(1,0,0), 1 - (h.Health/h.MaxHealth)) end
+                else d.box.Visible = false; d.name.Visible = false; d.dist.Visible = false; d.hpBg.Visible = false end
+            elseif eDrw[plr] then for _, v in pairs(eDrw[plr]) do if v.Destroy then v:Destroy() end end; eDrw[plr] = nil end
+        end
+    end
+end)
+
+TabESP:Section({ Title = "玩家透视" })
+TabESP:Toggle({ Title = "开启透视", Value = false, Callback = function(en) espEn = en end })
+TabESP:Toggle({ Title = "显示方框", Value = true, Callback = function(en) sBox = en end })
+TabESP:Toggle({ Title = "显示名字", Value = true, Callback = function(en) sName = en end })
+TabESP:Toggle({ Title = "显示距离", Value = true, Callback = function(en) sDist = en end })
+TabESP:Toggle({ Title = "显示血量", Value = false, Callback = function(en) sHp = en end })
+TabESP:Dropdown({ Title = "颜色", Values = {"红色", "蓝色", "绿色", "黄色", "紫色", "白色"}, Value = "红色", Callback = function(o)
+    if o == "红色" then eCol = Color3.fromRGB(255,50,50) elseif o == "蓝色" then eCol = Color3.fromRGB(0,140,255) elseif o == "绿色" then eCol = Color3.fromRGB(50,255,50) elseif o == "黄色" then eCol = Color3.fromRGB(255,255,50) elseif o == "紫色" then eCol = Color3.fromRGB(180,50,255) elseif o == "白色" then eCol = Color3.fromRGB(255,255,255) end
+    for _, p in pairs(eDrw) do p.name.TextColor3 = eCol; for _, f in ipairs(p.box:GetChildren()) do if f:IsA("Frame") then f.BackgroundColor3 = eCol end end end
+end })
+
+-- =========================================================
+-- ATM 透视
+-- =========================================================
+local atmEspEnabled = false
+local atmTags = {}
+
+local function doScan()
+    if not atmEspEnabled then
+        for obj, data in pairs(atmTags) do 
+            if data.bg and data.bg.Parent then data.bg:Destroy() end
+            if data.hl and data.hl.Parent then data.hl:Destroy() end
+        end
+        atmTags = {}
+        return
+    end
+
+    local scanned = 0
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        local n = string.lower(obj.Name)
+        if obj:IsA("Model") and n == "atm" then
+            if not atmTags[obj] then
+                local part = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
+                if part then
+                    local bg = Instance.new("BillboardGui")
+                    bg.Size = UDim2.new(0, 100, 0, 30); bg.StudsOffset = Vector3.new(0, 3, 0); bg.AlwaysOnTop = true; bg.Parent = part
+                    local txt = Instance.new("TextLabel")
+                    txt.Size = UDim2.fromScale(1, 1); txt.BackgroundTransparency = 1; txt.Text = "💰 ATM"
+                    txt.TextColor3 = Color3.fromRGB(0, 255, 0); txt.TextStrokeTransparency = 0; txt.Font = Enum.Font.GothamBold; txt.TextSize = 16
+                    txt.Parent = bg
+                    
+                    local hl = Instance.new("Highlight")
+                    hl.FillColor = Color3.fromRGB(0, 255, 100)
+                    hl.FillTransparency = 0.5
+                    hl.OutlineColor = Color3.fromRGB(0, 255, 0)
+                    hl.OutlineTransparency = 0
+                    hl.Adornee = obj
+                    hl.Parent = obj
+                    
+                    atmTags[obj] = {bg = bg, hl = hl}
+                end
+            end
+        end
+        scanned = scanned + 1
+        if scanned % 500 == 0 then task.wait() end
+    end
+end
+
+TabESP:Section({ Title = "物品透视" })
+TabESP:Toggle({ Title = "透视ATM机 (高亮+文字)", Value = false, Callback = function(en) 
+    atmEspEnabled = en
+    if en then 
+        task.spawn(doScan) 
+    else
+        for obj, data in pairs(atmTags) do 
+            if data.bg and data.bg.Parent then data.bg:Destroy() end
+            if data.hl and data.hl.Parent then data.hl:Destroy() end
+        end
+        atmTags = {}
+    end
+end })
+
+-- =========================================================
+-- 碰撞箱页
+-- =========================================================
+local hbEn, hbSz, hbCol, hbDep = false, 10, Color3.fromRGB(255,50,50), 0.5
+local hbConn, hbOrig = nil, {}
+local function applyHB(c)
+    if not c or c == LocalPlayer.Character then return end
+    local r = c:FindFirstChild("HumanoidRootPart"); local h = c:FindFirstChildOfClass("Humanoid")
+    if r and h and h.Health > 0 then
+        if not hbOrig[r] then hbOrig[r] = {Size = r.Size, Transparency = r.Transparency, Color = r.Color, Material = r.Material} end
+        r.Size = Vector3.new(hbSz, hbSz, hbSz); r.Color = hbCol; r.Transparency = hbDep; r.Material = Enum.Material.ForceField; r.CanCollide = false
+    end
+end
+local function restoreHB()
+    for r, d in pairs(hbOrig) do pcall(function() if r and r.Parent then r.Size = d.Size; r.Transparency = d.Transparency; r.Color = d.Color; r.Material = d.Material end end) end
+    hbOrig = {}
+end
+TabHit:Section({ Title = "碰撞箱扩大" })
+TabHit:Toggle({ Title = "开启 (所有玩家)", Value = false, Callback = function(en)
+    hbEn = en
+    if hbConn then hbConn:Disconnect(); hbConn = nil end
+    if en then
+        hbConn = RunService.Heartbeat:Connect(function()
+            if hbEn then
+                for r, d in pairs(hbOrig) do
+                    if not r.Parent or not r.Parent:FindFirstChildOfClass("Humanoid") or r.Parent:FindFirstChildOfClass("Humanoid").Health <= 0 then
+                        if r and r.Parent then r.Size = d.Size; r.Transparency = d.Transparency; r.Color = d.Color; r.Material = d.Material end
+                        hbOrig[r] = nil
+                    end
+                end
+                for _, p in ipairs(Players:GetPlayers()) do if p ~= LocalPlayer then applyHB(p.Character) end end
+            end
+        end)
+    else restoreHB() end
+end })
+TabHit:Slider({ Title = "大小", Value = { Min = 2, Max = 50, Default = 10 }, Callback = function(v) hbSz = v end })
+TabHit:Slider({ Title = "透视度", Value = { Min = 0, Max = 1, Default = 0.5 }, Callback = function(v) hbDep = v end })
+TabHit:Button({ Title = "重置", Callback = function() hbEn = false; if hbConn then hbConn:Disconnect(); hbConn = nil end; restoreHB() end })
+
+-- =========================================================
+-- 📍 传送页
+-- =========================================================
+TabTP:Section({ Title = "【 常用地点 】" })
+
+TabTP:Button({ Title = "🍔 传送去汉堡店", Callback = function()
+    local r = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if r then r.CFrame = CFrame.new(1335, 6, -705) end
+end })
+
+TabTP:Button({ Title = "🏦 传送去银行", Callback = function()
+    local r = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if r then r.CFrame = CFrame.new(1114, 8, -330) end
+end })
+
+TabTP:Button({ Title = "🔫 传送去枪店", Callback = function()
+    local r = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if r then r.CFrame = CFrame.new(675, 6, -687) end
+end })
+
+TabTP:Button({ Title = "🏠 传送回出生点", Callback = function()
+    local char = LocalPlayer.Character; if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart"); if not hrp then return end
+    local spawnLoc = nil
+    for _, v in ipairs(workspace:GetDescendants()) do if v:IsA("SpawnLocation") then spawnLoc = v; break end end
+    if spawnLoc then hrp.CFrame = spawnLoc.CFrame + Vector3.new(0, 3, 0)
+    else hrp.CFrame = CFrame.new(0, 50, 0) end
+end })
+
+-- =========================================================
+-- ⚡ 自动页
+-- =========================================================
+local atmFarmEn = false
+local atmFarmSpd = 0.15
+local atmAttackCount = 6
+local atmCooldown = 0.5
+
+TabAuto:Section({ Title = "🏦 ATM 全自动打劫" })
+TabAuto:Paragraph({ Title = "⚠️ 说明", Desc = "自动装备拳头，精准传送到吐钱口正前方。攻击时实时锁定角色和视角，绝对不空刀。" })
+
+TabAuto:Slider({ Title = "攻击速度 (秒)", Value = { Min = 0.05, Max = 2, Default = 0.15 }, Callback = function(v) atmFarmSpd = v end })
+TabAuto:Slider({ Title = "每个 ATM 攻击次数", Value = { Min = 1, Max = 20, Default = 6 }, Callback = function(v) atmAttackCount = v end })
+TabAuto:Slider({ Title = "传送冷却 (秒)", Value = { Min = 0.1, Max = 5, Default = 0.5 }, Callback = function(v) atmCooldown = v end })
+
+TabAuto:Toggle({ Title = "开启 ATM 全自动打劫", Value = false, Callback = function(en)
+    atmFarmEn = en
+    if en then
+        task.spawn(function()
+            while atmFarmEn do
+                local targetATMs = {}
+                pcall(function()
+                    for _, obj in ipairs(workspace:GetDescendants()) do
+                        local n = string.lower(obj.Name)
+                        if (obj:IsA("Model") and n == "atm") or (obj:IsA("BasePart") and n == "atm") then
+                            local part = obj:IsA("Model") and (obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")) or obj
+                            if part then table.insert(targetATMs, part) end
+                        end
+                    end
+                end)
+
+                for _, atmPart in ipairs(targetATMs) do
+                    if not atmFarmEn then break end
+                    local char = LocalPlayer.Character
+                    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                    
+                    if hrp then
+                        -- 自动装备
+                        pcall(function()
+                            local bp = LocalPlayer:FindFirstChildOfClass("Backpack")
+                            if bp then
+                                local bestTool = nil
+                                for _, tool in ipairs(bp:GetChildren()) do
+                                    if tool:IsA("Tool") then
+                                        local name = string.lower(tool.Name)
+                                        if name:find("fist") or name:find("拳") or name:find("hand") then
+                                            bestTool = tool; break
+                                        end
+                                    end
+                                end
+                                if bestTool then
+                                    local hum = char:FindFirstChildOfClass("Humanoid")
+                                    if hum then hum:EquipTool(bestTool) end
+                                end
+                            end
+                        end)
+
+                        -- 精准传送并锁定朝向
+                        local atmPos = atmPart.Position
+                        local atmLook = atmPart.CFrame.LookVector
+                        local standPos = atmPos + (atmLook * 2.5) + Vector3.new(0, 1.5, 0)
+                        
+                        hrp.CFrame = CFrame.new(standPos, atmPos)
+                        Camera.CFrame = CFrame.new(Camera.CFrame.Position, atmPos)
+
+                        -- 模拟点击攻击
+                        for i = 1, atmAttackCount do
+                            if not atmFarmEn then break end
+                            pcall(function()
+                                local curChar = LocalPlayer.Character
+                                local curHrp = curChar and curChar:FindFirstChild("HumanoidRootPart")
+                                if curHrp then
+                                    curHrp.CFrame = CFrame.new(curHrp.Position, atmPos)
+                                    Camera.CFrame = CFrame.new(Camera.CFrame.Position, atmPos)
+                                end
+                                
+                                local tool = char:FindFirstChildOfClass("Tool")
+                                if tool then tool:Activate() end
+                                
+                                local vu = game:GetService("VirtualUser")
+                                vu:CaptureController()
+                                vu:ClickButton1(Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2))
+                            end)
+                            task.wait(atmFarmSpd)
+                        end
+                        task.wait(atmCooldown)
+                    end
+                end
+                task.wait(2)
+            end
+        end)
+        pcall(function() game:GetService("StarterGui"):SetCore("SendNotification", {Title="ATM打劫", Text="已开启，实时锁定朝向", Duration=3}) end)
+    else
+        pcall(function() game:GetService("StarterGui"):SetCore("SendNotification", {Title="ATM打劫", Text="已停止", Duration=3}) end)
+    end
+end })
+
+-- =========================================================
+-- 🧲 吸人页
+-- =========================================================
+local pullEn = false
+local pullHeight = 4.5
+local pullAll = false
+local selectedTargets = {}
+local pullDropdown = nil
+
+local function getOtherPlayers()
+    local names = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            table.insert(names, p.Name)
+        end
+    end
+    table.sort(names)
+    return names
+end
+
+TabPull:Section({ Title = "🧲 吸人设置" })
+TabPull:Paragraph({ Title = "说明", Desc = "选中的玩家会被瞬间传送到你的头顶上方。为了避免踩头，高度默认在头顶 4.5 格。" })
+
+pullDropdown = TabPull:Dropdown({
+    Title = "选择吸附目标（可多选）",
+    Values = getOtherPlayers(),
+    Value = {},
+    Multi = true,
+    AllowNone = true,
+    Callback = function(v)
+        selectedTargets = {}
+        if type(v) == "table" then
+            for _, name in ipairs(v) do
+                local p = Players:FindFirstChild(name)
+                if p then selectedTargets[p] = true end
+            end
+        end
+    end
+})
+
+TabPull:Button({
+    Title = "🔄 刷新玩家列表",
+    Callback = function()
+        if pullDropdown and pullDropdown.SetValues then
+            pullDropdown.SetValues(getOtherPlayers())
+            pullDropdown.SetValue({})
+            selectedTargets = {}
+        end
+    end
+})
+
+TabPull:Toggle({
+    Title = "吸附全部玩家（无视列表）",
+    Value = false,
+    Callback = function(en)
+        pullAll = en
+    end
+})
+
+TabPull:Slider({
+    Title = "吸附高度（头顶上方格数）",
+    Value = { Min = 3, Max = 20, Default = 4.5 },
+    Step = 0.1,
+    Callback = function(v)
+        pullHeight = v
+    end
+})
+
+TabPull:Toggle({
+    Title = "开启吸人",
+    Value = false,
+    Callback = function(en)
+        pullEn = en
+        if not en then
+            pcall(function() game:GetService("StarterGui"):SetCore("SendNotification", {Title="吸人", Text="已停止", Duration=3}) end)
+            return
+        end
+
+        pcall(function() game:GetService("StarterGui"):SetCore("SendNotification", {Title="吸人", Text="已开启，正在拉取目标", Duration=3}) end)
+
+        task.spawn(function()
+            while pullEn do
+                task.wait(0.1)
+                pcall(function()
+                    local myChar = LocalPlayer.Character
+                    local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
+                    if not myHrp then return end
+                    
+                    local targetPos = myHrp.Position + Vector3.new(0, pullHeight, 0)
+
+                    if pullAll then
+                        for _, p in ipairs(Players:GetPlayers()) do
+                            if p ~= LocalPlayer then
+                                local tChar = p.Character
+                                local tHrp = tChar and tChar:FindFirstChild("HumanoidRootPart")
+                                if tHrp then
+                                    tHrp.CFrame = CFrame.new(targetPos)
+                                end
+                            end
+                        end
+                    else
+                        for p, _ in pairs(selectedTargets) do
+                            if p and p.Parent then
+                                local tChar = p.Character
+                                local tHrp = tChar and tChar:FindFirstChild("HumanoidRootPart")
+                                if tHrp then
+                                    tHrp.CFrame = CFrame.new(targetPos)
+                                end
+                            end
+                        end
+                    end
+                end)
+            end
+        end)
+    end
+})
+
+-- =========================================================
+-- ⚙️ 设置页
+-- =========================================================
+TabSettings:Section({ Title = "⚙️ 界面设置" })
+
+TabSettings:Dropdown({
+    Title = "切换窗口颜色",
+    Values = {"蓝色", "红色", "绿色", "黄色", "紫色", "青色", "粉色", "金色"},
+    Value = "蓝色",
+    Callback = function(option)
+        -- 这需要 UI 库的支持，通常 WindUI 本身支持配置主题
+        -- 如果是纯粹改变 UIStroke，需要遍历修改，但这里我们调用库自带的接口（如果有）
+        pcall(function()
+            Window:SetTheme(option) -- 假设 WindUI 支持中文主题名，如果不支持则需要映射
+        end)
+        
+        -- 因为不确定 WindUI 的内部代码，做一个备用方案：直接暴力改窗口边框颜色
+        local mainFrame = Window.UIElements and Window.UIElements.Main
+        if mainFrame then
+            local stroke = mainFrame:FindFirstChildOfClass("UIStroke")
+            if stroke then
+                if option == "蓝色" then stroke.Color = Color3.fromRGB(59, 130, 246)
+                elseif option == "红色" then stroke.Color = Color3.fromRGB(230, 70, 70)
+                elseif option == "绿色" then stroke.Color = Color3.fromRGB(60, 200, 120)
+                elseif option == "黄色" then stroke.Color = Color3.fromRGB(240, 200, 60)
+                elseif option == "紫色" then stroke.Color = Color3.fromRGB(160, 100, 255)
+                elseif option == "青色" then stroke.Color = Color3.fromRGB(70, 220, 220)
+                elseif option == "粉色" then stroke.Color = Color3.fromRGB(255, 100, 180)
+                elseif option == "金色" then stroke.Color = Color3.fromRGB(255, 215, 0)
+                end
+            end
+        end
+    end
+})
+
+TabSettings:Section({ Title = "危险操作" })
+TabSettings:Button({
+    Title = "❌ 关闭并销毁窗口",
+    Callback = function()
+        pcall(function()
+            Window:Destroy() -- 销毁 UI
+            -- 顺便销毁全局的检测和飞行 UI
+            local coreGui = game:GetService("CoreGui")
+            if coreGui:FindFirstChild("FlyUIControl") then coreGui.FlyUIControl:Destroy() end
+        end)
+    end
+})
+
+Window:SelectTab(1)
